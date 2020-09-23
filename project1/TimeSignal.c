@@ -6,7 +6,7 @@
 // Place any necessary global variables here
 struct timeval start, end;
 int iter = 100000;
-int count = 0;
+int count = 1;
 
 void handle_sigfpe(int signum){
 	if(count < iter) {
