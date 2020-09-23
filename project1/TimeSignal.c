@@ -14,9 +14,9 @@ void handle_sigfpe(int signum){
 		gettimeofday(&end, NULL);
 		float cost = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
 		printf("Exceptions Ocurred: %d\n", iter);
-		printf("Total Elapsed Time: %d\n", cost);
-		printf("Average Time Per Exception: %d\n", (cost/iter));		
-		exit();
+		printf("Total Elapsed Time: %f\n", cost);
+		printf("Average Time Per Exception: %f\n", (cost/iter));		
+		exit(0);
 	}
 }
 

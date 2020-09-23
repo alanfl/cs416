@@ -17,8 +17,8 @@ int main(int argc, char *argv[]){
 	float cost = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
 
 	printf("Syscalls Performed: %d\n", iter);
-	printf("Total Elapsed Time: %d\n", cost);
-	printf("Average Time Per Syscall: %d\n", (cost/iter));
+	printf("Total Elapsed Time: %f\n", cost);
+	printf("Average Time Per Syscall: %f\n", (cost/iter));
 
 	return 0;
 

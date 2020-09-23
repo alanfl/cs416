@@ -12,7 +12,7 @@ int main(int argc, char *argv[]){
 
 	for(int i = 0; i < iter; i++) {
 		if(fork() == 0) {
-			exit();
+			exit(0);
 		} else {
 			wait();
 		}
@@ -22,8 +22,8 @@ int main(int argc, char *argv[]){
 	float cost = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
 
 	printf("Forks Performed: %d\n", iter);
-	printf("Total Elapsed Time: %d\n", cost);
-	printf("Average Time Per Fork: %d\n", (cost/iter));
+	printf("Total Elapsed Time: %f microseconds\n", cost);
+	printf("Average Time Per Fork: %f microseconds\n", (cost/iter));
 
 	return 0;
 
