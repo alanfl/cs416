@@ -1,5 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include <sys/time.h>
 
 // Place any necessary global variables here

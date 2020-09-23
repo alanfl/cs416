@@ -9,7 +9,7 @@ int count = 0;
 
 void handle_sigfpe(int signum){
 	if(count < iter) {
-		return
+		return;
 	} else {
 		gettimeofday(&end, NULL);
 		float cost = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
@@ -18,6 +18,7 @@ void handle_sigfpe(int signum){
 		printf("Average Time Per Exception: %f\n", (cost/iter));		
 		exit(0);
 	}
+	return;
 }
 
 int main(int argc, char *argv[]){

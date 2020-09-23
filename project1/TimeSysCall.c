@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 // Place any necessary global variables here
 struct timeval start, end;
