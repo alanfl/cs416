@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <signal.h>
 #include <sys/time.h>
 
 // Place any necessary global variables here
@@ -9,13 +10,14 @@ int count = 0;
 
 void handle_sigfpe(int signum){
 	if(count < iter) {
+		count++;
 		return;
 	} else {
 		gettimeofday(&end, NULL);
 		float cost = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
 		printf("Exceptions Ocurred: %d\n", iter);
-		printf("Total Elapsed Time: %f\n", cost);
-		printf("Average Time Per Exception: %f\n", (cost/iter));		
+		printf("Total Elapsed Time: %f microseconds\n", cost);
+		printf("Average Time Per Exception: %f microseconds\n", (cost/iter));		
 		exit(0);
 	}
 	return;
