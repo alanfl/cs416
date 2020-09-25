@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 
 // Place any necessary global variables here
 struct timeval start, end;
@@ -16,7 +17,7 @@ int main(int argc, char *argv[]){
 		if(fork() == 0) {
 			exit(0);
 		} else {
-			wait();
+			wait(NULL);
 		}
 	}
 

@@ -26,10 +26,10 @@ void handle_sigfpe(int signum){
 int main(int argc, char *argv[]){
 	int x = 5;
 	int y = 0;
-	int z = 0;
+	int z;
 	signal(SIGFPE, handle_sigfpe);
 	gettimeofday(&start, NULL);
 	z = x / y;
-	return 0;
+	return z;
 
 }
