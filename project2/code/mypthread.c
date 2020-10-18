@@ -1,6 +1,6 @@
 // File:	mypthread.c
 
-// List all group member's name: Alan Luo
+// List all group member's name: Alan Luo and Patrick Meng
 // username of iLab: afl59
 // iLab Server:
 
