@@ -15,6 +15,8 @@
 #define debug(...) \
   do { if (DEBUG) fprintf(stderr, __VA_ARGS__); } while (0)
 
+// We utilize a linked list to implement our scheduling queue
+
 typedef struct qnode {
     tcb* data;
     struct qnode* next;
@@ -28,6 +30,10 @@ void mypthread_timer_block(void);
 void mypthread_timer_unblock(void);
 static void schedule();
 
+// ** IMPORTANT CONSTANTS **
+// MYPTHREAD_MAX_THREAD_ID is the maximum number of threads allowed
+// MYPTHREAD_TIMER_INTERVAL is the time interval each thread has to operate
+// MYPTHREAD_STACK_SIZE should probably remain constant, try not to change it around
 const uint MYPTHREAD_MAX_THREAD_ID  = 50000;
 const uint MYPTHREAD_TIMER_INTERVAL = 5000;
 const uint MYPTHREAD_STACK_SIZE     = 8388608;
@@ -37,6 +43,8 @@ uint mypthread_id = 0;
 
 queue_t *ready, *completed;
 tcb* tcb_curr;
+
+// ** BASIC LINKED LIST FUNCTIONS **
 
 void queue_push(queue_t* q, tcb* data) {
 	qnode_t* node = (qnode_t*)calloc(1, sizeof(qnode_t));
@@ -124,6 +132,8 @@ tcb* queue_remove(queue_t* q, mypthread_t tid) {
 	return data;
 }
 
+// ** SIGNAL BLOCKING AND HANDLING STUFF **
+
 sigset_t sigprof_set;
 void mypthread_timer_block(void) {
 	if (sigprocmask(SIG_BLOCK, &sigprof_set, NULL) != 0) {
@@ -143,6 +153,7 @@ void mypthread_timer_handler(int signum, siginfo_t *info, void *context) {
 	schedule();
 }
 
+// Register both the signal handler and the actual timer itself
 void mypthread_timer_init(void) {
 	sigemptyset(&sigprof_set);
 	sigaddset(&sigprof_set, SIGPROF);
@@ -170,6 +181,7 @@ void mypthread_timer_init(void) {
 	}
 }
 
+// We need this in order to reset our timer after a context swap
 void mypthread_timer_reset(void) {
 	struct itimerval mypthread_timer;
 	mypthread_timer.it_value.tv_sec = 0;
@@ -183,7 +195,7 @@ void mypthread_timer_reset(void) {
 	}
 }
 
-
+// Basic thread init function
 void mypthread_init(void) {
 	ready = (queue_t*)calloc(1, sizeof(queue_t));
 	completed = (queue_t*)calloc(1, sizeof(queue_t));
@@ -196,6 +208,8 @@ void mypthread_init(void) {
 	mypthread_timer_init();
 }
 
+// We need this function wrapper so we have a way to guarantee exiting at the end of a
+// function's runtime
 void mypthread_func_wrapper(void) {
 	mypthread_timer_block();
 	tcb* tcb_now = tcb_curr;
@@ -308,6 +322,7 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	return 0;
 };
 
+// ** MUTEX STUFF **
 /* initialize the mutex lock */
 int mypthread_mutex_init(mypthread_mutex_t *mutex,
                           const pthread_mutexattr_t *mutexattr) {
@@ -387,6 +402,7 @@ static void sched_stcf() {
 	swapcontext(&tcb_saved->context, &tcb_curr->context);
 }
 
+// ONLY FOR 518 (NOT US)
 /* Preemptive MLFQ scheduling algorithm */
 static void sched_mlfq() {
 	// Your own implementation of MLFQ
