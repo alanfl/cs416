@@ -45,6 +45,11 @@ typedef struct threadControlBlock {
 	void* retval;
 } tcb;
 
+typedef struct qnode {
+	tcb* data;
+	struct qnode* next;
+} qnode_t;
+
 /* mutex struct definition */
 typedef struct mypthread_mutex_t {
 	/* add something here */
@@ -52,7 +57,8 @@ typedef struct mypthread_mutex_t {
 	// YOUR CODE HERE
 	volatile atomic_flag flag;
 	int status;
-	uint owner;
+	uint owner; // tid of who locked the mutex
+	queue_t* blocked // all tcbs waiting for this mutex
 } mypthread_mutex_t;
 
 /* define your data structures here: */

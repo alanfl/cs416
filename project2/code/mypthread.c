@@ -15,17 +15,6 @@
 #define debug(...) \
   do { if (DEBUG) fprintf(stderr, __VA_ARGS__); } while (0)
 
-// We utilize a linked list to implement our scheduling queue
-
-typedef struct qnode {
-    tcb* data;
-    struct qnode* next;
-} qnode_t;
-typedef struct queue {
-    qnode_t* head;
-		uint size;
-} queue_t;
-
 void mypthread_timer_block(void);
 void mypthread_timer_unblock(void);
 static void schedule();
@@ -150,6 +139,7 @@ void mypthread_timer_unblock(void) {
 }
 
 void mypthread_timer_handler(int signum, siginfo_t *info, void *context) {
+	mypthread_timer_block();
 	schedule();
 }
 
@@ -298,27 +288,20 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	while(1) {
 		mypthread_timer_block();
 		tcb* tcb_found = queue_remove(completed, thread);
-		int thread_exist = 1;
+		
 		if (tcb_found == NULL) {
-			// check if thread exist in ready or completed queue
-			// thread_exist = queue_is_member(ready, thread);
-		}
-		mypthread_timer_unblock();
-		if (tcb_found != NULL) {
-			debug("join found thread %d\n", tcb_found->tid);
-			if (value_ptr != NULL)
+			debug("Join with found thread %d\n", tcb_found->tid);
+			if(value_ptr != NULL) {
 				*value_ptr = tcb_found->retval;
+			}
+			mypthread_timer_unblock();
 			return thread;
 		} else {
-			debug("join thread yield after NOT found thread: %d\n", thread);
-		  	if (thread_exist == 0) {
-			// thread does not exist
-				return ESRCH;
-			}
 			schedule();
 		}
 	}
 
+	mypthread_timer_unblock();
 	return 0;
 };
 
@@ -328,6 +311,7 @@ int mypthread_mutex_init(mypthread_mutex_t *mutex,
                           const pthread_mutexattr_t *mutexattr) {
 	atomic_flag_clear(&(mutex->flag));
 	mutex->owner = -1;
+	mutex->blocked = (queue_t*) calloc(1, sizeof(queue_t));
 	mutex->status = 1; // 1 - initialized
 	return 0;
 };
@@ -337,8 +321,11 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 	if (mutex->status != 1) return EBUSY;
 	if (tcb_curr->tid == mutex->owner) return 0;
 	while (atomic_flag_test_and_set(&(mutex->flag))) {
+		mypthread_timer_block();
+		tcb->status = 1;
+		queue_push(mutex->blocked, tcb_curr);
 		debug("thread %d failed to lock mutex and yield\n", tcb_curr->tid);
-		mypthread_yield();
+		schedule(); // Yield to next
 	};
 	// debug("thread %d locked mutex\n", tcb_curr->tid);
 	mutex->owner = tcb_curr->tid;
@@ -347,11 +334,25 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 
 /* release the mutex lock */
 int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
-	if (mutex->status != 1) return EBUSY;
-	if (mutex->owner == tcb_curr->tid) {
+	if (mutex->status == tcb_curr->tid) {
 		mutex->owner = -1;
 		atomic_flag_clear(&(mutex->flag));
-		// debug("thread %d freed mutex\n", tcb_curr->tid);
+		tcb* tcb_blocked = NULL;
+
+		if(queue_is_empty(mutex->blocked) == 0) {
+			// Optimization to avoid calling timer_block for each mutex_unlock
+			// At this point, the mutexx is unlocked
+			// If there another thread waiting between stmt and timer_block
+			// Then another thread must've locked the mutex already
+			// It must be free for the blocked thread
+			mypthread_timer_block();
+			if((tcb_blocked=queue_pop(mutex->blocked)) != NULL) {
+				tcb_blocked->status = 0;
+				queue_push(ready, tcb_blocked);
+				debug("Thread %d changed from blocked to ready\n", tcb_blocked->tid);
+			}
+			mypthread_timer_unblock();
+		}
 		return 0;
 	}
 	return EBUSY;
@@ -361,16 +362,15 @@ int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
 /* destroy the mutex */
 int mypthread_mutex_destroy(mypthread_mutex_t *mutex) {
 	if (mutex->status != 1) return EBUSY;
+	mutex->status = 0;
 	if (tcb_curr->tid != mutex->owner) {
 		while (atomic_flag_test_and_set(&(mutex->flag))) {
 			debug("thread %d failed to lock mutex and yield\n", tcb_curr->tid);
 			mypthread_yield();
 		};
-		mutex->status = 0;
 		mutex->owner = -1;
 		atomic_flag_clear(&(mutex->flag));
 	} else {
-		mutex->status = 0;
 		mutex->owner = -1;
 		atomic_flag_clear(&(mutex->flag));
 	}
@@ -383,10 +383,10 @@ int mypthread_context_switch(void) {
 
 /* Preemptive SJF (STCF) scheduling algorithm */
 static void sched_stcf() {
-  mypthread_timer_block();
+  	// mypthread_timer_block();
 	if (queue_is_empty(ready)) {
   	mypthread_timer_unblock();
-		debug("schedule stay on\n");
+		// debug("schedule stay on\n");
 		return;
 	}
 
