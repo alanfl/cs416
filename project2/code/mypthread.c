@@ -11,20 +11,20 @@
 #include <stdio.h>
 #include "mypthread.h"
 
-#define DEBUG 0
+#ifdef DEBUG
 #define debug(...) \
-  do { if (DEBUG) fprintf(stderr, __VA_ARGS__); } while (0)
+  fprintf(stderr, __VA_ARGS__);
+#else
+  #define debug(...) \
+  {}
+#endif
 
 void mypthread_timer_block(void);
 void mypthread_timer_unblock(void);
 static void schedule();
 
-// ** IMPORTANT CONSTANTS **
-// MYPTHREAD_MAX_THREAD_ID is the maximum number of threads allowed
-// MYPTHREAD_TIMER_INTERVAL is the time interval each thread has to operate
-// MYPTHREAD_STACK_SIZE should probably remain constant, try not to change it around
 const uint MYPTHREAD_MAX_THREAD_ID  = 50000;
-const uint MYPTHREAD_TIMER_INTERVAL = 5000;
+const uint MYPTHREAD_TIMER_INTERVAL = 15000;
 const uint MYPTHREAD_STACK_SIZE     = 8388608;
 
 uint mypthread_init_flag = 1;
@@ -32,8 +32,6 @@ uint mypthread_id = 0;
 
 queue_t *ready, *completed;
 tcb* tcb_curr;
-
-// ** BASIC LINKED LIST FUNCTIONS **
 
 void queue_push(queue_t* q, tcb* data) {
 	qnode_t* node = (qnode_t*)calloc(1, sizeof(qnode_t));
@@ -288,12 +286,10 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	while(1) {
 		mypthread_timer_block();
 		tcb* tcb_found = queue_remove(completed, thread);
-		
-		if (tcb_found == NULL) {
-			debug("Join with found thread %d\n", tcb_found->tid);
-			if(value_ptr != NULL) {
+		if (tcb_found != NULL) {
+			debug("join found thread %d\n", tcb_found->tid);
+			if (value_ptr != NULL)
 				*value_ptr = tcb_found->retval;
-			}
 			mypthread_timer_unblock();
 			return thread;
 		} else {
@@ -305,7 +301,6 @@ int mypthread_join(mypthread_t thread, void **value_ptr) {
 	return 0;
 };
 
-// ** MUTEX STUFF **
 /* initialize the mutex lock */
 int mypthread_mutex_init(mypthread_mutex_t *mutex,
                           const pthread_mutexattr_t *mutexattr) {
@@ -319,11 +314,11 @@ int mypthread_mutex_init(mypthread_mutex_t *mutex,
 /* aquire the mutex lock */
 int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 	if (mutex->status != 1) return EBUSY;
-	if (tcb_curr->tid == mutex->owner) return 0;
+	if (tcb_curr->tid == mutex->owner) return 0; // only thread owning the lock can change the owner
 	while (atomic_flag_test_and_set(&(mutex->flag))) {
-		mypthread_timer_block();
-		tcb->status = 1;
-		queue_push(mutex->blocked, tcb_curr);
+		mypthread_timer_block(); // critical section
+		tcb_curr->status = 1;  // set tcb status as blocked
+		queue_push(mutex->blocked, tcb_curr);  // add it into per mutex blocked queue
 		debug("thread %d failed to lock mutex and yield\n", tcb_curr->tid);
 		schedule(); // Yield to next
 	};
@@ -334,7 +329,7 @@ int mypthread_mutex_lock(mypthread_mutex_t *mutex) {
 
 /* release the mutex lock */
 int mypthread_mutex_unlock(mypthread_mutex_t *mutex) {
-	if (mutex->status == tcb_curr->tid) {
+	if (mutex->owner == tcb_curr->tid) {
 		mutex->owner = -1;
 		atomic_flag_clear(&(mutex->flag));
 		tcb* tcb_blocked = NULL;
@@ -402,7 +397,6 @@ static void sched_stcf() {
 	swapcontext(&tcb_saved->context, &tcb_curr->context);
 }
 
-// ONLY FOR 518 (NOT US)
 /* Preemptive MLFQ scheduling algorithm */
 static void sched_mlfq() {
 	// Your own implementation of MLFQ

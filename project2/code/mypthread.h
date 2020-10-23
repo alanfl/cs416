@@ -36,7 +36,7 @@ typedef struct threadControlBlock {
 
 	// YOUR CODE HERE
 	uint tid;
-	int status;
+	int status; // 0:ready, 1:blocked, -1:completed
 	uint age;
 	ucontext_t context;
 	void* stack;
@@ -46,11 +46,11 @@ typedef struct threadControlBlock {
 } tcb;
 
 typedef struct qnode {
-	tcb* data;
-	struct qnode* next;
+    tcb* data;
+    struct qnode* next;
 } qnode_t;
 
-typdef struct queue {
+typedef struct queue {
 	qnode_t* head;
 	uint size;
 } queue_t;
