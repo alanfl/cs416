@@ -63,7 +63,7 @@ typedef struct mypthread_mutex_t {
 	volatile atomic_flag flag;
 	int status;
 	uint owner; // tid of who locked the mutex
-	queue_t* blocked // all tcbs waiting for this mutex
+	queue_t* blocked; // all tcbs waiting for this mutex
 } mypthread_mutex_t;
 
 /* define your data structures here: */
