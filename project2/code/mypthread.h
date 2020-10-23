@@ -50,6 +50,11 @@ typedef struct qnode {
 	struct qnode* next;
 } qnode_t;
 
+typdef struct queue {
+	qnode_t* head;
+	uint size;
+} queue_t;
+
 /* mutex struct definition */
 typedef struct mypthread_mutex_t {
 	/* add something here */
