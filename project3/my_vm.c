@@ -14,14 +14,14 @@
 pthread_mutex_t my_vm_mutex;
 
 // Vars for shifting and/or masking
-int page_num, dir_num, entry_num, frame_num;
-int page_bit_num, tbl_bit_num;
+int num_pages, num_dirs, num_entries, num_frames;
+int num_page_bits, num_tbl_bits;
 int tbl_shift, dir_shift;
 unsigned long offset_mask, tbl_mask;
 
 void* pm;   // Physical memory
-char* vbm   // Virtual bit map
-char* pbm   // Physical bit map
+char* vbm;   // Virtual bit map
+char* pbm;   // Physical bit map
 pde_t* pgdir;
 
 int init_flag = 0;
@@ -70,11 +70,45 @@ void SetPhysicalMem() {
 
     //Allocate physical memory using mmap or malloc; this is the total size of
     //your memory you are simulating
+    unsigned long long vMemSize = MAX_MEMSIZE;
+    unsigned long pMemSize = MEMSIZE;
+    debug("Page size: %d, vMemSize: %llu, pMemSize: %lu\n", PGSIZE, vMemSize, pMemSize);
 
-    
+    pm = malloc(MEMSIZE);
+    debug("Allocated physical memory at: %p\n", pm);
+
+    // Calculate vars
+    num_frames = MEMSIZE / PGSIZE;
+    num_pages = MAX_MEMSIZE / PGSIZE;
+    num_entries = PGSIZE / sizeof(pte_t);                       // Page table entries
+    num_dirs = 1 << logTwo(num_pages) - logTwo(num_entries);    // Dir table entries
+    num_page_bits = logTwo(PGSIZE);
+    num_tbl_bits = logTwo(num_entries);
+
+    debug("Frames: %d, Pages: %d, DirTableEntries: %d, PageTableEntries: %d\n", num_frames, num_pages, num_dirs, num_entries)
+
+    tbl_shift = logTwo(PGSIZE);
+    offset_mask = (unsigned long) 0xffffffff >> ((sizeof(unsigned long) * 8 - tbl_shift));
+    dir_shift = logTwo(num_entries) + tbl_shift;
+    tbl_mask = (unsigned long) 0xffffffff >> (32 - num_tbl_bits);
+
+    debug("TableShift: %d, PageOffsetMaks: %p, 1stTblShift: %d, 2ndTblShift: %p\n",
+        tbl_shift, (void*) offset_mask, dir_shift, (void*) tbl_mask);
+
+    // Bitmaps
+    vbm = calloc(MAX_MEMSIZE / PGSIZE, sizeof(char));
+    vbm[0] = 0xff;  // Reserve as the header
+
+    pbm = calloc(MEMSIZE / PGSIZE, sizeof(char));
+
+    // 1st level page table
+    pgdir = (pde_t*) calloc(num_dirs, sizeof(pde_t));
+
+    // Init first 2nd level page table for optimization
+    pgdir[0] = (pte_t) calloc(num_entries, sizeof(pte_t));
+
     //HINT: Also calculate the number of physical and virtual pages and allocate
     //virtual and physical bitmaps and initialize them
-
 }
 
 
