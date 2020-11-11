@@ -15,7 +15,7 @@ pthread_mutex_t my_vm_mutex;
 
 // Vars for shifting and/or masking
 int page_num, dir_num, entry_num, frame_num;
-int page_bit_num, tbl_bit_num
+int page_bit_num, tbl_bit_num;
 int tbl_shift, dir_shift;
 unsigned long offset_mask, tbl_mask;
 
@@ -23,6 +23,45 @@ void* pm;   // Physical memory
 char* vbm   // Virtual bit map
 char* pbm   // Physical bit map
 pde_t* pgdir;
+
+int init_flag = 0;
+
+void init() {
+    if (init_flag) return;
+    
+    init_flag = 1;
+
+    pthread_mutex_init(&my_vm_mutex, NULL);
+
+    time_t t;
+    srand((unsigned) time(&t)); // TLB replace policy is random for now
+    SetPhysicalMem();
+}
+
+// Get the offset within the page
+int getPageOffset(void* va) {
+    return (unsigned long) va & offset_mask;
+}
+
+// Get index to the 2nd level page table
+int getTblOffset(void* va) {
+    return ((unsigned long) va >> tbl_shift) & tbl_mask;
+}
+
+// Get index to the 1st level page table
+int getDirOffset(void* va) {
+    return ((unsigned long) va >> dir_shift);
+}
+
+// log2 function so we don't have to link with math lib
+int logTwo(unsigned long long x) {
+    int i = 0;
+    while (x > 1) {
+        x = x >> 1;
+        i++;
+    }
+    return i;
+}
 
 /*
 Function responsible for allocating and setting your physical memory 
