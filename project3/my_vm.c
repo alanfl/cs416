@@ -1,6 +1,28 @@
 #include "my_vm.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
 
-int page_size_physical, page_size_virtual;
+#define DEBUG 0
+#define debug(...) \
+    do { if (DEBUG) fprintf(stderr, __VA_ARGS__); } while (0)
+
+#define TLB 1
+
+// For making virtual memory thread-safe
+pthread_mutex_t my_vm_mutex;
+
+// Vars for shifting and/or masking
+int page_num, dir_num, entry_num, frame_num;
+int page_bit_num, tbl_bit_num
+int tbl_shift, dir_shift;
+unsigned long offset_mask, tbl_mask;
+
+void* pm;   // Physical memory
+char* vbm   // Virtual bit map
+char* pbm   // Physical bit map
+pde_t* pgdir;
 
 /*
 Function responsible for allocating and setting your physical memory 
