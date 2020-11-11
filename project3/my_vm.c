@@ -85,7 +85,7 @@ void SetPhysicalMem() {
     num_page_bits = logTwo(PGSIZE);
     num_tbl_bits = logTwo(num_entries);
 
-    debug("Frames: %d, Pages: %d, DirTableEntries: %d, PageTableEntries: %d\n", num_frames, num_pages, num_dirs, num_entries)
+    debug("Frames: %d, Pages: %d, DirTableEntries: %d, PageTableEntries: %d\n", num_frames, num_pages, num_dirs, num_entries);
 
     tbl_shift = logTwo(PGSIZE);
     offset_mask = (unsigned long) 0xffffffff >> ((sizeof(unsigned long) * 8 - tbl_shift));
