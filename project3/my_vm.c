@@ -111,7 +111,120 @@ void SetPhysicalMem() {
     //virtual and physical bitmaps and initialize them
 }
 
+// Fetch first free physical frame from bitmap
+int getFreeFrame() {
+    int i = 0;
+    for(; i < num_frames; i++) {
+        debug("pbm[%d]: %02x\n", i, pbm[i]);
+        if ((pbm[i] & 0x01) == 0) break; // 0: free; 1: in use
+    }
 
+    // Assign as in use if in bounds
+    if(i < num_frames) {
+        pbm[i] = 1;
+    } else {
+        i = -1;
+    }
+
+    debug("Grabbed physical mem frame: %d\n", i);
+    return i;
+}
+
+/*
+    ******* TLB STUFF *******
+*/
+
+int tlb_index = 0;
+int tlb_curr_size = 0;
+unsigned long tlb_total = 0;    // TLB call count
+unsigned long tlb_miss = 0;     // Miss count
+
+// Helper function to get physical address from virtual address in the TLB
+void* get_in_tlb(void *va) {
+    tlb_total++;
+    int i = tlb_curr_size;
+    while(i >= 0) {
+        if(tlb_store[i].va == (void*) ((unsigned long)va >> tbl_shift)) {
+            tlb_store[i].ts = tlb_total; // Update timestamp of entry
+            return tlb_store[i].pa
+        }
+        i--;
+    }
+    tlb_miss++;
+    return NULL;
+}
+
+void remove_from_tlb(void* va_page_num) {
+    int i = tlb_curr_size;
+    while(i >= 0) {
+        if(tlb_store[i].va == va_page_num) {
+            tlb_store[i].va = NULL;
+            debug("TLB removed va page: %p\n", va_page_num);
+        }
+        i--;
+    }
+}
+
+// As defined in Part 2
+// Checks the presence of a translation in TLB
+pte_t* check_TLB(void *va) {
+    return (pte_t*) get_in_tlb(va);
+}
+
+// As defined in .h file
+bool check_in_tlb(void *va) {
+    bool ret = false;
+    if(get_in_tlb(va) != NULL) {
+        ret = true;
+    }
+    return ret;
+}
+
+void put_in_tlb(void *va, void *pa) {
+    debug("TLB put va: %p, pa: %p\n", va, pa);
+    int i;
+
+    if(tlb_curr_size < TLB_SIZE) {
+        i = tlb_curr_size;
+        tlb_curr_size++;
+    } else {
+        i = 0;
+        for(int x = 0; x < tlb_curr_size; x++) {
+            if(tlb_store[x].va != NULL && tlb_store[x].ts < tlb_store[i].ts) {
+                i = x;
+            }
+        }
+        // i = rand() % TLB_SIZE;
+        debug("TLB is full, override old one: %d\n", i);
+    }
+    tlb_store[i].va = (void*)((unsigned long)va >> tbl_shift);
+    tlb_store[i].pa = pa;
+    tlb_store[i].ts = tlb_total;
+}
+
+int add_TLB(void* va, void* pa) {
+    put_in_tlb(va, pa);
+    return -1;
+}
+
+float get_tlb_miss_rate() {
+    if(TLB) {
+        debug("TLB total: %ld, miss: %ld\n", tlb_total, tlb_miss);
+        return tlb_miss/(float) tlb_total;
+    } else {
+        return 1;
+    }
+}
+
+void print_TLB_missrate() {
+    if(TLB) {
+        fprintf(stderr, "TLB miss rate %lf \n", get_tlb_miss_rate());
+    } else {
+        fprintf(stderr, "TLB is disabled\n");
+    }
+}
+
+// ******** TRANSLATION STUFF *********
 
 /*
 The function takes a virtual address and page directories starting address and
@@ -122,6 +235,11 @@ pte_t * Translate(pde_t *pgdir, void *va) {
     //2nd-level-page table index using the virtual address.  Using the page
     //directory index and page table index get the physical address
 
+    // For thread safety
+    pthread_mutex_lock(&my_vm_mutex);
+
+    // Check invalid access
+    if((vbm[(unsigned long)va >> num_page_bits] & 0x03) == 0)
 
     //If translation not successfull
     return NULL; 
