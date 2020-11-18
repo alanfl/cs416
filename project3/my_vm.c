@@ -146,7 +146,7 @@ void* get_in_tlb(void *va) {
     while(i >= 0) {
         if(tlb_store[i].va == (void*) ((unsigned long)va >> tbl_shift)) {
             tlb_store[i].ts = tlb_total; // Update timestamp of entry
-            return tlb_store[i].pa
+            return tlb_store[i].pa;
         }
         i--;
     }
@@ -256,7 +256,7 @@ pte_t * Translate(pde_t *pgdir, void *va) {
         int pgdir_offset = getDirOffset(va);
 
         // Check if a page table was allocated, if not, create the 2nd level page table
-        if((void*) (pgdir[pgdir_offset] == NULL)) {
+        if((void*) (pgdir[pgdir_offset]) == NULL) {
             pgdir[pgdir_offset] = (pte_t) calloc(num_entries, sizeof(pte_t));
         }
         
