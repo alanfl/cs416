@@ -32,8 +32,8 @@ struct tlb {
     //Assume your TLB is a direct mapped TLB of TBL_SIZE (entries)
     // You must also define wth TBL_SIZE in this file.
     //Assume each bucket to be 4 bytes
-};
-struct tlb tlb_store;
+} tlb_t;
+tlb_t tlb_store[TLB_SIZE];
 
 
 void SetPhysicalMem();
