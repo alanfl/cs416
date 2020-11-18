@@ -239,10 +239,54 @@ pte_t * Translate(pde_t *pgdir, void *va) {
     pthread_mutex_lock(&my_vm_mutex);
 
     // Check invalid access
-    if((vbm[(unsigned long)va >> num_page_bits] & 0x03) == 0)
+    if((vbm[(unsigned long)va >> num_page_bits] & 0x03) == 0) {
+        printf("Error: invalid memory access at address: %p\n", va);
+        abort();
+    }
 
-    //If translation not successfull
-    return NULL; 
+    // Check TLB for translation
+    void* pa;
+    void* pa_base = NULL;
+    if(TLB) {
+        pa_base = get_in_tlb(va);
+    }
+
+    // Couldn't find in TLB, perform translation (and allocation)
+    if(pa_base == NULL) {
+        int pgdir_offset = getDirOffset(va);
+
+        // Check if a page table was allocated, if not, create the 2nd level page table
+        if((void*) (pgdir[pgdir_offset] == NULL)) {
+            pgdir[pgdir_offset] = (pte_t) calloc(num_entries, sizeof(pte_t));
+        }
+        
+        // Now, fetch the next free physical frame and assign it to our virtual memory
+        int tbl_offset = getTblOffset(va);
+        if((void*) (((pte_t*) pgdir[pgdir_offset])[tbl_offset]) == NULL) {
+            long frame_offset = (unsigned long) getFreeFrame();
+            
+            // Not enough physical memory left
+            // We don't expect to run out of memory so this "shouldn't" happen
+            if(frame_offset < 0) {
+                debug("Error: not enough physical memory");
+                abort();
+            }
+
+            // Check for existing mapping/add new entry
+            PageMap(pgdir, va, pm + PGSIZE * frame_offset);
+        }
+        pa_base = (void*) (((pte_t*) pgdir[pgdir_offset])[tbl_offset]);
+
+        // Add into the TLB
+        if(TLB) {
+            put_in_tlb(va, pa_base);
+        }
+    }
+    pthread_mutex_unlock(&my_vm_mutex);
+
+    pa = (void*) (pa_base + getPageOffset(va));
+    debug("Translated va: %p, pa: %p\n", va, pa);
+    return (pte_t*) pa;
 }
 
 
