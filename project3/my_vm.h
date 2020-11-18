@@ -25,7 +25,7 @@ typedef unsigned long pde_t;
 #define TLB_SIZE 120
 
 //Structure to represents TLB
-struct tlb {
+typedef struct tlb {
     void* va;
     void* pa;
     unsigned long ts;   // Timestamp for 
