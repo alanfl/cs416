@@ -304,15 +304,40 @@ PageMap(pde_t *pgdir, void *va, void *pa)
     and page table (2nd-level) indices. If no mapping exists, set the
     virtual to physical mapping */
 
-    return -1;
+    ((pte_t*) pgdir[getDirOffset(va)])[getTblOffset(va)] = (pte_t)pa;
+    return 0;
 }
 
 
 /*Function that gets the next available page
 */
-void *get_next_avail(int num_pages) {
- 
+void *get_next_avail(int num_of_pages) {
     //Use virtual address bitmap to find the next free page
+
+    int more_pages = num_of_pages;
+    int i = 0;
+
+    while(more_pages > 0) {
+        // Not in use, okay to assign
+        if((vbm[i] & 0x03) == 0) {
+            more_pages--;
+        }
+        // In use, must reset for contiguous block
+        else {
+            more_pages = num_of_pages;
+        }
+        i++;
+    }
+
+    // Begin allocating
+    int start = i - num_of_pages;
+    vbm[start] = vbm[start] & 0xfd | 0x02; // Mark as start of in use block
+    for(int j = 1; j < num_of_pages - 1; j++) {
+        vbm[start + j] = vbm[start + j] & 0xfd | 0x02; // Mark as in use, middle of block
+    }
+    vbm[start + num_of_pages - 1] = vbm[start + num_of_pages - 1] & 0xfd | 0x03; // Mark as in use, end of block
+    debug("Allocated virtual memory: %p\n", (void*)((i - num_of_pages) * PGSIZE));
+    return (void*)((i - num_of_pages) * PGSIZE);
 }
 
 
@@ -328,7 +353,12 @@ void *myalloc(unsigned int num_bytes) {
    free pages are available, set the bitmaps and map a new page. Note, you will 
    have to mark which physical pages are used. */
 
-    return NULL;
+    init();
+    void* va = NULL;
+    pthread_mutex_lock(&my_vm_mutex);
+    va = get_next_avail((num_bytes + PGSIZE - 1)/PGSIZE); // ceil equivalent
+    pthread_mutex_unlock(&my_vm_mutex);
+    return va;
 }
 
 /* Responsible for releasing one or more memory pages using virtual address (va)
@@ -338,6 +368,48 @@ void myfree(void *va, int size) {
     //Free the page table entries starting from this virtual address (va)
     // Also mark the pages free in the bitmap
     //Only free if the memory from "va" to va+size is valid
+
+    if(va == NULL) return;
+    init();
+    unsigned long start_index = (unsigned long) va >> num_page_bits;
+    unsigned long end_index = ((unsigned long) va + size - 1) >> num_page_bits;
+    debug("free called on va: %p, size: %d, start: %lu, end: %lu\n", va, size, start_index, end_index);
+    debug("start bitmap: %02x, end bitmap: %02x\n", vbm[start_index], vbm[end_index]);
+
+    pthread_mutex_lock(&my_vm_mutex);
+    if(((start_index == end_index) && ((vbm[start_index] & 0x03) == 3)) || 
+      (((vbm[start_index] & 0x03) == 1) && ((vbm[end_index] & 0x03) == 3)) ) {
+        debug("start and end match\n");
+        for(unsigned long i = start_index + 1; i < end_index; i++) {
+            if((vbm[i] & 0x03) != 2) {
+                debug("Virtual address in between pages is invalid\n");
+                pthread_mutex_unlock(&my_vm_mutex);
+                return;
+            }
+        }
+        for(unsigned long i = start_index; i <= end_index; i++) {
+            remove_from_tlb((void*) i); // Freeing, so we need to remove from TLB
+            unsigned long dir_offset = i >> (dir_shift - tbl_shift);
+            if((void*)(pgdir[dir_offset]) != NULL) {
+                unsigned long tbl_offset = i & tbl_mask;
+                void* pa = (void*)(((pte_t*) pgdir[dir_offset])[tbl_offset]);
+
+                // 0 is NULL pointer
+                ((pte_t*) pgdir[dir_offset])[tbl_offset] = 0; // Clear 2nd level page table
+                if(pa != NULL) {
+                    unsigned long f = ((unsigned long) pa - (unsigned long) pm) / PGSIZE;
+                    pbm[f] = pbm[f] & 0xfe; // Clear physical bit map
+                    debug("Freed physical frame pbm[%lu]: %02x\n", f, pbm[f]);
+                }
+            }
+            vbm[i] = vbm[i] & 0xfc; // Clear virtual bit map
+            debug("Freed virtual vbm[%lu]: %02x\n", i, vbm[i]);
+        }
+        debug("Freed virtual mem from: %lu to %lu\n", start_index, end_index);
+    } else {
+        debug("Virtual address start or end page was invalid\n");
+    }
+    pthread_mutex_unlock(&my_vm_mutex);
 }
 
 
