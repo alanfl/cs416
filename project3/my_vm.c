@@ -478,7 +478,7 @@ void GetVal(void *va, void *val, int size) {
     if(last < 0) {
         last = 0;
     }
-    debug("GetVal va: %p, val: %p, first: %d, others: %d, last:%d\n", va, val, first, others, last)
+    debug("GetVal va: %p, val: %p, first: %d, others: %d, last:%d\n", va, val, first, others, last);
 
     void* pa;
     // First page
