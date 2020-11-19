@@ -422,7 +422,41 @@ void PutVal(void *va, void *val, int size) {
        the contents of "val" to a physical page. NOTE: The "size" value can be larger
        than one page. Therefore, you may have to find multiple pages using Translate()
        function.*/
+    init();
+    int first = PGSIZE - getPageOffset(va);
+    if(first > size) {
+        first = size;
+    }
 
+    int others = (size - first) / PGSIZE;
+    int last = size - first - others * PGSIZE;
+    if(last < 0) {
+        last = 0;
+    }
+    debug("PutVal va: %p, val: %p, first: %d, others: %d, last: %d\n", va, val, first, others, last);
+
+    void* pa;
+    // First page
+    if(first > 0) {
+        pa = (void*) Translate(pgdir, va);
+        memcpy(pa, val, first);
+    }
+
+    // Other pages
+    va += first;
+    val += first;
+    for(int i = 0; i < others; i++) {
+        pa = (void*) Translate(pgdir, va);
+        memccpy(pa, val, PGSIZE);
+        va += PGSIZE;
+        val += PGSIZE;
+    }
+
+    // Last page
+    if(last > 0) {
+        pa = (void*) Translate(pgdir, va);
+        memcpy(pa, val, last);
+    }
 }
 
 
@@ -434,7 +468,40 @@ void GetVal(void *va, void *val, int size) {
     If you are implementing TLB,  always check first the presence of translation
     in TLB before proceeding forward */
 
+    init();
+    int first = PGSIZE - getPageOffset(va);
+    if(first > size) {
+        first = size;
+    }
+    int others = (size - first) / PGSIZE;
+    int last = size - first - others * PGSIZE;
+    if(last < 0) {
+        last = 0;
+    }
+    debug("GetVal va: %p, val: %p, first: %d, others: %d, last:%d\n", va, val, first, others, last)
 
+    void* pa;
+    // First page
+    if(first > 0) {
+        pa = (void*) Translate(pgdir, va);
+        memcpy(val, pa, first);
+    }
+
+    // Other pages
+    va += first;
+    val += first;
+    for(int i = 0; i < others; i++) {
+        pa = (void *) Translate(pgdir, va);
+        memcpy(val, pa, PGSIZE);
+        va += PGSIZE;
+        val += PGSIZE;
+    }
+
+    // Last page
+    if(last > 0) {
+        pa = (void*) Translate(pgdir, va);
+        memcpy(val, pa, last);
+    }
 }
 
 
@@ -452,5 +519,16 @@ void MatMult(void *mat1, void *mat2, int size, void *answer) {
     getting the values from two matrices, you will perform multiplication and 
     store the result to the "answer array"*/
 
-       
+    int x, y, temp;
+    for(int i = 0; i < size; i++) {
+        for(int j = 0; j < size; j ++) {
+            temp = 0;
+            for(int k = 0; k < size; k++) {
+                GetVal(mat1 + (i * size * sizeof(int)) + k * sizeof(int), &x, sizeof(int));
+                GetVal(mat2 + (k * size * sizeof(int)) + j * sizeof(int), &y, sizeof(int));
+                temp += x * y;
+                PutVal(answer + (i * size * sizeof(int)) + j * sizeof(int), &temp, sizeof(int));
+            }
+        }
+    }       
 }
