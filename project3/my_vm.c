@@ -447,7 +447,7 @@ void PutVal(void *va, void *val, int size) {
     val += first;
     for(int i = 0; i < others; i++) {
         pa = (void*) Translate(pgdir, va);
-        memccpy(pa, val, PGSIZE);
+        memcpy(pa, val, PGSIZE);
         va += PGSIZE;
         val += PGSIZE;
     }
