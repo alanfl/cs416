@@ -1,17 +1,24 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <time.h>
 #include "../my_vm.h"
 
-#define SIZE 5
+int SIZE = 5;
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2)
+        SIZE = atoi(argv[1]);
 
-    printf("Allocating three arrays of 400 bytes\n");
-    void *a = m_alloc(100*4);
+    struct timespec start, end;
+    clock_gettime(CLOCK_REALTIME, &start);
+
+    printf("Allocating three arrays of %d bytes\n", SIZE*SIZE*4);
+    void *a = myalloc(SIZE*SIZE*4);
     int old_a = (int)a;
-    void *b = m_alloc(100*4);
-    void *c = m_alloc(100*4);
+    void *b = myalloc(SIZE*SIZE*4);
+    void *c = myalloc(SIZE*SIZE*4);
     int x = 1;
     int y, z;
     int i =0, j=0;
@@ -56,16 +63,22 @@ int main() {
         printf("\n");
     }
     printf("Freeing the allocations!\n");
-    a_free(a, 100*4);
-    a_free(b, 100*4);
-    a_free(c, 100*4);
-    
+    myfree(a, SIZE*SIZE*4);
+    myfree(b, SIZE*SIZE*4);
+    myfree(c, SIZE*SIZE*4);
+
     printf("Checking if allocations were freed!\n");
-    a = m_alloc(100*4);
+    a = myalloc(100*4);
+    printf("a: %p\n", a);
     if ((int)a == old_a)
         printf("free function works\n");
     else
         printf("free function does not work\n");
 
+    clock_gettime(CLOCK_REALTIME, &end);
+    printf("running time: %lu nano-seconds\n",
+        (end.tv_sec - start.tv_sec) * 1000 * 1000 * 1000 + (end.tv_nsec - start.tv_nsec));
+
+    print_TLB_missrate();
     return 0;
 }
