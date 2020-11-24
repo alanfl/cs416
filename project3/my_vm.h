@@ -1,3 +1,6 @@
+// Alan Luo and Patrick Meng
+// afl59 and pm708
+
 #ifndef MY_VM_H_INCLUDED
 #define MY_VM_H_INCLUDED
 #include <stdbool.h>

@@ -1,3 +1,6 @@
+// Alan Luo and Patrick Meng
+// afl59 and pm708
+
 #include "my_vm.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +11,7 @@
 #define debug(...) \
     do { if (DEBUG) fprintf(stderr, __VA_ARGS__); } while (0)
 
-#define TLB 1
+#define TLB 0
 
 // For making virtual memory thread-safe
 pthread_mutex_t my_vm_mutex;
@@ -28,7 +31,7 @@ int init_flag = 0;
 
 void init() {
     if (init_flag) return;
-    
+
     init_flag = 1;
 
     pthread_mutex_init(&my_vm_mutex, NULL);
@@ -80,7 +83,7 @@ void SetPhysicalMem() {
     // Calculate vars
     num_frames = MEMSIZE / PGSIZE;
     num_pages = MAX_MEMSIZE / PGSIZE;
-    num_entries = PGSIZE / sizeof(pte_t);                       // Page table entries
+    num_entries = 1 << ((int)logTwo(num_pages) / 2); // 2nd level page table entries
     num_dirs = 1 << logTwo(num_pages) - logTwo(num_entries);    // Dir table entries
     num_page_bits = logTwo(PGSIZE);
     num_tbl_bits = logTwo(num_entries);
@@ -91,24 +94,20 @@ void SetPhysicalMem() {
     offset_mask = (unsigned long) 0xffffffff >> ((sizeof(unsigned long) * 8 - tbl_shift));
     dir_shift = logTwo(num_entries) + tbl_shift;
     tbl_mask = (unsigned long) 0xffffffff >> (32 - num_tbl_bits);
+    debug("TableShift: %d, PageOffsetMask: %p, 1stTableShift: %d, 2ndTableMask: %p\n",
+        tbl_shift, (void*)offset_mask, dir_shift, (void*)tbl_mask);
 
-    debug("TableShift: %d, PageOffsetMaks: %p, 1stTblShift: %d, 2ndTblShift: %p\n",
-        tbl_shift, (void*) offset_mask, dir_shift, (void*) tbl_mask);
-
-    // Bitmaps
-    vbm = calloc(MAX_MEMSIZE / PGSIZE, sizeof(char));
-    vbm[0] = 0xff;  // Reserve as the header
-
-    pbm = calloc(MEMSIZE / PGSIZE, sizeof(char));
+    // create vm bitmap
+    vbm = calloc(MAX_MEMSIZE/PGSIZE, sizeof(char));
+    vbm[0] = 0xff; // reserv as header;
+    // create pm bitmap
+    pbm = calloc(MEMSIZE/PGSIZE, sizeof(char));
 
     // 1st level page table
     pgdir = (pde_t*) calloc(num_dirs, sizeof(pde_t));
 
     // Init first 2nd level page table for optimization
     pgdir[0] = (pte_t) calloc(num_entries, sizeof(pte_t));
-
-    //HINT: Also calculate the number of physical and virtual pages and allocate
-    //virtual and physical bitmaps and initialize them
 }
 
 // Fetch first free physical frame from bitmap
@@ -129,10 +128,6 @@ int getFreeFrame() {
     debug("Grabbed physical mem frame: %d\n", i);
     return i;
 }
-
-/*
-    ******* TLB STUFF *******
-*/
 
 int tlb_index = 0;
 int tlb_curr_size = 0;
@@ -224,20 +219,12 @@ void print_TLB_missrate() {
     }
 }
 
-// ******** TRANSLATION STUFF *********
-
-/*
-The function takes a virtual address and page directories starting address and
-performs translation to return the physical address
-*/
+/****
+    The function takes a virtual address and page directories starting address and
+    performs translation to return the physical address
+****/
 pte_t * Translate(pde_t *pgdir, void *va) {
-    //HINT: Get the Page directory index (1st level) Then get the
-    //2nd-level-page table index using the virtual address.  Using the page
-    //directory index and page table index get the physical address
-
-    // For thread safety
     pthread_mutex_lock(&my_vm_mutex);
-
     // Check invalid access
     if((vbm[(unsigned long)va >> num_page_bits] & 0x03) == 0) {
         printf("Error: invalid memory access at address: %p\n", va);
@@ -253,29 +240,20 @@ pte_t * Translate(pde_t *pgdir, void *va) {
 
     // Couldn't find in TLB, perform translation (and allocation)
     if(pa_base == NULL) {
-        int pgdir_offset = getDirOffset(va);
-
-        // Check if a page table was allocated, if not, create the 2nd level page table
-        if((void*) (pgdir[pgdir_offset]) == NULL) {
-            pgdir[pgdir_offset] = (pte_t) calloc(num_entries, sizeof(pte_t));
+        int dirOffset = getDirOffset(va);
+        if ((void*)(pgdir[dirOffset]) == NULL) {
+            pgdir[dirOffset] = (pte_t)calloc(num_entries, sizeof(pte_t));  // create 2nd level page table
         }
-        
-        // Now, fetch the next free physical frame and assign it to our virtual memory
-        int tbl_offset = getTblOffset(va);
-        if((void*) (((pte_t*) pgdir[pgdir_offset])[tbl_offset]) == NULL) {
-            long frame_offset = (unsigned long) getFreeFrame();
-            
-            // Not enough physical memory left
-            // We don't expect to run out of memory so this "shouldn't" happen
-            if(frame_offset < 0) {
-                debug("Error: not enough physical memory");
+        int tblOffset = getTblOffset(va);
+        if((void*)(((pte_t*)pgdir[dirOffset])[tblOffset]) == NULL) {
+            long frameOffset = (unsigned long)getFreeFrame();
+            if(frameOffset < 0) {
+                debug("Error: not enough physical memory\n");
                 abort();
             }
-
-            // Check for existing mapping/add new entry
-            PageMap(pgdir, va, pm + PGSIZE * frame_offset);
+            PageMap(pgdir, va, pm + PGSIZE * frameOffset);
         }
-        pa_base = (void*) (((pte_t*) pgdir[pgdir_offset])[tbl_offset]);
+        pa_base = (void*) (((pte_t*)pgdir[dirOffset])[tblOffset]);
 
         // Add into the TLB
         if(TLB) {
@@ -296,14 +274,7 @@ as an argument, and sets a page table entry. This function will walk the page
 directory to see if there is an existing mapping for a virtual address. If the
 virtual address is not present, then a new entry will be added
 */
-int
-PageMap(pde_t *pgdir, void *va, void *pa)
-{
-
-    /*HINT: Similar to Translate(), find the page directory (1st level)
-    and page table (2nd-level) indices. If no mapping exists, set the
-    virtual to physical mapping */
-
+int PageMap(pde_t *pgdir, void *va, void *pa) {
     ((pte_t*) pgdir[getDirOffset(va)])[getTblOffset(va)] = (pte_t)pa;
     return 0;
 }
@@ -331,7 +302,7 @@ void *get_next_avail(int num_of_pages) {
 
     // Begin allocating
     int start = i - num_of_pages;
-    vbm[start] = vbm[start] & 0xfd | 0x02; // Mark as start of in use block
+    vbm[start] = vbm[start] & 0xfd | 0x01; // Mark as start of in use block
     for(int j = 1; j < num_of_pages - 1; j++) {
         vbm[start + j] = vbm[start + j] & 0xfd | 0x02; // Mark as in use, middle of block
     }
@@ -345,14 +316,6 @@ void *get_next_avail(int num_of_pages) {
 and used by the benchmark
 */
 void *myalloc(unsigned int num_bytes) {
-
-    //HINT: If the physical memory is not yet initialized, then allocate and initialize.
-
-   /* HINT: If the page directory is not initialized, then initialize the
-   page directory. Next, using get_next_avail(), check if there are free pages. If
-   free pages are available, set the bitmaps and map a new page. Note, you will 
-   have to mark which physical pages are used. */
-
     init();
     void* va = NULL;
     pthread_mutex_lock(&my_vm_mutex);
@@ -364,11 +327,6 @@ void *myalloc(unsigned int num_bytes) {
 /* Responsible for releasing one or more memory pages using virtual address (va)
 */
 void myfree(void *va, int size) {
-
-    //Free the page table entries starting from this virtual address (va)
-    // Also mark the pages free in the bitmap
-    //Only free if the memory from "va" to va+size is valid
-
     if(va == NULL) return;
     init();
     unsigned long start_index = (unsigned long) va >> num_page_bits;
@@ -412,16 +370,7 @@ void myfree(void *va, int size) {
     pthread_mutex_unlock(&my_vm_mutex);
 }
 
-
-/* The function copies data pointed by "val" to physical
- * memory pages using virtual address (va)
-*/
 void PutVal(void *va, void *val, int size) {
-
-    /* HINT: Using the virtual address and Translate(), find the physical page. Copy
-       the contents of "val" to a physical page. NOTE: The "size" value can be larger
-       than one page. Therefore, you may have to find multiple pages using Translate()
-       function.*/
     init();
     int first = PGSIZE - getPageOffset(va);
     if(first > size) {
@@ -462,12 +411,6 @@ void PutVal(void *va, void *val, int size) {
 
 /*Given a virtual address, this function copies the contents of the page to val*/
 void GetVal(void *va, void *val, int size) {
-
-    /* HINT: put the values pointed to by "va" inside the physical memory at given
-    "val" address. Assume you can access "val" directly by derefencing them.
-    If you are implementing TLB,  always check first the presence of translation
-    in TLB before proceeding forward */
-
     init();
     int first = PGSIZE - getPageOffset(va);
     if(first > size) {
@@ -491,7 +434,7 @@ void GetVal(void *va, void *val, int size) {
     va += first;
     val += first;
     for(int i = 0; i < others; i++) {
-        pa = (void *) Translate(pgdir, va);
+        pa = (void*) Translate(pgdir, va);
         memcpy(val, pa, PGSIZE);
         va += PGSIZE;
         val += PGSIZE;
@@ -504,30 +447,17 @@ void GetVal(void *va, void *val, int size) {
     }
 }
 
-
-
-/*
-This function receives two matrices mat1 and mat2 as an argument with size
-argument representing the number of rows and columns. After performing matrix
-multiplication, copy the result to answer.
-*/
 void MatMult(void *mat1, void *mat2, int size, void *answer) {
-
-    /* Hint: You will index as [i * size + j] where  "i, j" are the indices of the
-    matrix accessed. Similar to the code in test.c, you will use GetVal() to
-    load each element and perform multiplication. Take a look at test.c! In addition to 
-    getting the values from two matrices, you will perform multiplication and 
-    store the result to the "answer array"*/
-
     int x, y, temp;
     for(int i = 0; i < size; i++) {
-        for(int j = 0; j < size; j ++) {
+        for(int j = 0; j < size; j++) {
             temp = 0;
-            for(int k = 0; k < size; k++) {
+            for (int k = 0; k < size; k++) {
                 GetVal(mat1 + (i * size * sizeof(int)) + k * sizeof(int), &x, sizeof(int));
                 GetVal(mat2 + (k * size * sizeof(int)) + j * sizeof(int), &y, sizeof(int));
                 temp += x * y;
                 PutVal(answer + (i * size * sizeof(int)) + j * sizeof(int), &temp, sizeof(int));
+                // answer[i][j] += mat1[i][k] * mat2[k][j];
             }
         }
     }       
