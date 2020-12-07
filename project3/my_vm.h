@@ -1,3 +1,6 @@
+// Alan Luo and Patrick Meng
+// afl59 and pm708
+
 #ifndef MY_VM_H_INCLUDED
 #define MY_VM_H_INCLUDED
 #include <stdbool.h>
@@ -14,7 +17,7 @@
 // Maximum size of your memory
 #define MAX_MEMSIZE 4ULL*1024*1024*1024 //4GB
 
-#define MEMSIZE 1024*1024*1024
+#define MEMSIZE 1024ULL*1024*1024
 
 // Represents a page table entry
 typedef unsigned long pte_t;
